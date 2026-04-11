@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HindiDub</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0f0f1a; color: #fff; font-family: Arial, sans-serif; padding: 20px; min-height: 100vh; }
+.container { max-width: 800px; margin: 0 auto; }
+h1 { text-align: center; color: #7c6fff; margin-bottom: 5px; font-size: 2rem; }
+.sub { text-align: center; color: #aaa; margin-bottom: 25px; }
+.card { background: #1a1a2e; border-radius: 12px; padding: 20px; margin-bottom: 15px; }
+input, select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #333; background: #0f0f1a; color: #fff; margin-bottom: 12px; font-size: 1rem; }
+.btn-start { width: 100%; padding: 14px; background: #7c6fff; color: #fff; border: none; border-radius: 8px; font-size: 1.1rem; cursor: pointer; font-weight: bold; }
+.btn-start:hover { background: #6355dd; }
+.btn-cancel { padding: 10px 20px; background: #e74c3c; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 0.95rem; float: right; }
+.btn-cancel:hover { background: #c0392b; }
+.btn-retry { padding: 7px 14px; background: #e67e22; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.btn-download { padding: 7px 14px; background: #27ae60; color: #fff; border: none; border-radius: 6px; cursor: pointer; text-decoration: none; display: inline-block; }
+.progress-bg { background: #333; border-radius: 10px; height: 15px; margin: 10px 0; }
+.progress-fill { background: #7c6fff; height: 15px; border-radius: 10px; transition: width 0.5s; }
+.chunk-item { background: #0f0f1a; border-radius: 8px; padding: 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+.chunk-item.done { border-left: 4px solid #27ae60; }
+.chunk-item.failed { border-left: 4px solid #e74c3c; }
+.chunk-item.processing { border-left: 4px solid #f39c12; }
+.chunk-item.waiting { border-left: 4px solid #555; }
+.chunk-item.cancelled { border-left: 4px solid #888; }
+.badge { padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; }
+.badge-done { background: #27ae60; }
+.badge-failed { background: #e74c3c; }
+.badge-processing { background: #f39c12; }
+.badge-waiting { background: #555; }
+.badge-cancelled { background: #888; }
+.hidden { display: none; }
+.step-text { color: #aaa; font-size: 0.85rem; margin-top: 4px; }
+.actions { display: flex; gap: 8px; align-items: center; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🎬 HindiDub</h1>
+  <p class="sub">যেকোনো YouTube video Hindi তে Dub করো</p>
+
+  <!-- Input Card -->
+  <div class="card" id="inputCard">
+    <input type="text" id="url" placeholder="YouTube URL paste করো...">
+    <select id="voice">
+      <option value="female">Female Voice (hi-IN-Swara)</option>
+      <option value="male">Male Voice (hi-IN-Madhur)</option>
+    </select>
+    <select id="speed">
+      <option value="normal">Normal Speed</option>
+      <option value="slow">Slow Speed</option>
+      <option value="fast">Fast Speed</option>
+    </select>
+    <select id="chunk_minutes">
+      <option value="30">30 মিনিট করে ভাগ করো</option>
+      <option value="20">20 মিনিট করে ভাগ করো</option>
+      <option value="60">1 ঘণ্টা করে ভাগ করো</option>
+    </select>
+    <button class="btn-start" onclick="startDub()">🎙️ Dub in Hindi</button>
+  </div>
+
+  <!-- Progress Card -->
+  <div class="card hidden" id="progressCard">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <h3 id="mainStatus">Processing...</h3>
+      <button class="btn-cancel" onclick="cancelJob()">❌ Cancel</button>
+    </div>
+    <p id="mainMsg" style="color:#aaa; margin-bottom:8px;">Starting...</p>
+    <div class="progress-bg">
+      <div class="progress-fill" id="mainBar" style="width:0%"></div>
+    </div>
+    <p id="mainPct" style="color:#aaa; margin-top:5px;">0%</p>
+  </div>
+
+  <!-- Parts Status -->
+  <div class="card hidden" id="chunksCard">
+    <h3 style="margin-bottom:15px;">📦 Parts Status</h3>
+    <div id="chunkGrid"></div>
+  </div>
+</div>
+
+<script>
+let jobId = null;
+let pollInterval = null;
+
+async function startDub() {
+  const url = document.getElementById('url').value.trim();
+  if (!url) { alert('YouTube URL দাও!'); return; }
+
+  const voice = document.getElementById('voice').value;
+  const speed = document.getElementById('speed').value;
+  const chunk_minutes = parseInt(document.getElementById('chunk_minutes').value);
+
+  document.getElementById('inputCard').classList.add('hidden');
+  document.getElementById('progressCard').classList.remove('hidden');
+  document.getElementById('mainStatus').innerText = 'Processing...';
+  document.getElementById('mainMsg').innerText = 'Starting...';
+  document.getElementById('mainBar').style.width = '0%';
+  document.getElementById('mainPct').innerText = '0%';
+
+  try {
+    const res = await fetch('/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url, voice, speed, chunk_minutes})
+    });
+    const data = await res.json();
+    jobId = data.job_id;
+    pollInterval = setInterval(checkStatus, 4000);
+  } catch(e) {
+    alert('Error starting job: ' + e);
+  }
+}
+
+async function checkStatus() {
+  if (!jobId) return;
+  try {
+    const res = await fetch('/status/' + jobId);
+    const data = await res.json();
+
+    const progress = data.progress || 0;
+    const message = data.message || 'Processing...';
+
+    document.getElementById('mainMsg').innerText = message;
+    document.getElementById('mainBar').style.width = progress + '%';
+    document.getElementById('mainPct').innerText = progress + '%';
+
+    if (data.status === 'done') {
+      document.getElementById('mainStatus').innerText = '✅ All Done!';
+      clearInterval(pollInterval);
+    } else if (data.status === 'failed') {
+      document.getElementById('mainStatus').innerText = '❌ Failed!';
+      clearInterval(pollInterval);
+    } else if (data.status === 'cancelled') {
+      document.getElementById('mainStatus').innerText = '❌ Cancelled!';
+      clearInterval(pollInterval);
+      setTimeout(() => location.reload(), 2000);
+    }
+
+    if (data.chunks && data.chunks.length > 0) {
+      document.getElementById('chunksCard').classList.remove('hidden');
+      renderChunks(data.chunks);
+    }
+  } catch(e) {
+    console.error('Status check error:', e);
+  }
+}
+
+function renderChunks(chunks) {
+  const grid = document.getElementById('chunkGrid');
+  grid.innerHTML = '';
+
+  chunks.forEach((chunk, i) => {
+    const div = document.createElement('div');
+    div.className = `chunk-item ${chunk.status}`;
+
+    let badge = `<span class="badge badge-${chunk.status}">${chunk.status}</span>`;
+    let action = '';
+
+    if (chunk.status === 'done' && chunk.download_url) {
+      action = `<a class="btn-download" href="${chunk.download_url}" download>⬇️ Download</a>`;
+    } else if (chunk.status === 'failed') {
+      action = `<button class="btn-retry" onclick="retryChunk(${i})">🔄 Retry</button>`;
+    }
+
+    div.innerHTML = `
+      <div>
+        <strong>Part ${i + 1}</strong>
+        <p class="step-text">${chunk.step || ''}</p>
+      </div>
+      <div class="actions">
+        ${badge}
+        ${action}
+      </div>
+    `;
+    grid.appendChild(div);
+  });
+}
+
+async function cancelJob() {
+  if (!jobId) return;
+  if (!confirm('Processing বন্ধ করবে?')) return;
+  clearInterval(pollInterval);
+  try {
+    await fetch('/cancel/' + jobId, {method: 'POST'});
+    document.getElementById('mainStatus').innerText = '❌ Cancelled!';
+    document.getElementById('mainMsg').innerText = 'Job cancelled.';
+    setTimeout(() => location.reload(), 2000);
+  } catch(e) {
+    location.reload();
+  }
+}
+
+async function retryChunk(idx) {
+  if (!jobId) return;
+  try {
+    await fetch(`/retry/${jobId}/${idx}`, {method: 'POST'});
+    if (!pollInterval) {
+      pollInterval = setInterval(checkStatus, 4000);
+    }
+  } catch(e) {
+    alert('Retry failed');
+  }
+}
+</script>
+</body>
+</html>
