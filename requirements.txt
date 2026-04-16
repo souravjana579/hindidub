@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+yt-dlp
+faster-whisper
+deep-translator
+edge-tts
+ffmpeg-python
+aiofiles
+python-multipart
+requests
