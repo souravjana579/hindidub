@@ -7,6 +7,13 @@ import edge_tts
 from faster_whisper import WhisperModel
 from deep_translator import GoogleTranslator
 
+import google.generativeai as genai
+
+from dotenv import load_dotenv
+load_dotenv()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+genai.configure(api_key=GEMINI_API_KEY)
+
 app = FastAPI()
 jobs = {}
 os.makedirs("temp", exist_ok=True)
